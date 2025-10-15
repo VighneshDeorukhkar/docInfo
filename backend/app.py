@@ -55,13 +55,13 @@ class RequestModel(db.Model):
     document_name = db.Column(db.String(200))
     status = db.Column(db.String(50), default="pending")  # pending/approved/rejected
 
+
 with app.app_context():
     db.create_all()
 
 # ==========================================================
 # ROUTES
 # ==========================================================
-
 @app.route("/request-document", methods=["POST"])
 def request_document():
     data = request.get_json()
@@ -95,10 +95,9 @@ def approve_request(req_id):
     req.status = "approved"
     db.session.commit()
 
-    # UNC Network Path (update this for your environment)
+    # Update this path for your actual document folder
     NETWORK_BASE_PATH = r"\\10.178.0.14\Public\Telecommunication\06-OLD PROJECT REFERENCE\AWE\Architect Diagram\Rev-A"
 
-    # Normalize path and ensure .pdf extension
     filename = req.document_name
     if not filename.lower().endswith(".pdf"):
         filename += ".pdf"
@@ -110,7 +109,6 @@ def approve_request(req_id):
         logging.warning(f"⚠️ File not found: {doc_path}")
         return jsonify({"error": f"Document not found on server: {doc_path}"}), 404
 
-    # Try to send email with attachment
     try:
         msg = Message(
             subject=f"Document Request Approved: {req.document_name}",
@@ -145,9 +143,12 @@ def reject_request(req_id):
 
 
 # ==========================================================
-# MAIN ENTRY
+# MAIN ENTRY (RENDER FIX)
 # ==========================================================
 if __name__ == "__main__":
     os.makedirs("files", exist_ok=True)
-    logging.info("🚀 Server running at http://127.0.0.1:5000")
-    app.run(debug=True)
+
+    port = int(os.environ.get("PORT", 5000))  # Render sets PORT env variable
+    logging.info(f"🚀 Server running on 0.0.0.0:{port}")
+
+    app.run(host="0.0.0.0", port=port, debug=False)
