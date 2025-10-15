@@ -4,32 +4,51 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail, Message
 import os
 from dotenv import load_dotenv
+import logging
 
+# ==========================================================
 # Load environment variables
+# ==========================================================
 load_dotenv()
+print("EMAIL_USER:", os.getenv("EMAIL_USER"))
+print("EMAIL_PASS:", os.getenv("EMAIL_PASS"))
 
 # Flask setup
 app = Flask(__name__)
 CORS(app)
 
-# ===================== CONFIG =====================
-# Database
+# ==========================================================
+# CONFIGURATION
+# ==========================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "requests.db")
-app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH}"
 
-# Mail
-app.config["MAIL_SERVER"] = "smtp.gmail.com"
-app.config["MAIL_PORT"] = 587
-app.config["MAIL_USE_TLS"] = True
-app.config["MAIL_USERNAME"] = os.getenv("EMAIL_USER")
-app.config["MAIL_PASSWORD"] = os.getenv("EMAIL_PASS")
+app.config.update({
+    "SQLALCHEMY_DATABASE_URI": f"sqlite:///{DB_PATH}",
+    "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+    "MAIL_SERVER": "smtp.gmail.com",
+    "MAIL_PORT": 587,
+    "MAIL_USE_TLS": True,
+    "MAIL_USERNAME": os.getenv("EMAIL_USER"),
+    "MAIL_PASSWORD": os.getenv("EMAIL_PASS"),
+})
 
 # Initialize extensions
 db = SQLAlchemy(app)
 mail = Mail(app)
 
-# ===================== DATABASE MODEL =====================
+# ==========================================================
+# LOGGING SETUP
+# ==========================================================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s]: %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+
+# ==========================================================
+# DATABASE MODEL
+# ==========================================================
 class RequestModel(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(200))
@@ -39,17 +58,21 @@ class RequestModel(db.Model):
 with app.app_context():
     db.create_all()
 
+# ==========================================================
+# ROUTES
+# ==========================================================
 
-# ===================== API ROUTES =====================
 @app.route("/request-document", methods=["POST"])
 def request_document():
     data = request.get_json()
-    new_req = RequestModel(
-        email=data["email"],
-        document_name=data["document_name"]
-    )
+    if not data or "email" not in data or "document_name" not in data:
+        return jsonify({"error": "Missing email or document_name"}), 400
+
+    new_req = RequestModel(email=data["email"], document_name=data["document_name"])
     db.session.add(new_req)
     db.session.commit()
+
+    logging.info(f"📥 New request added: {data['document_name']} by {data['email']}")
     return jsonify({"message": "Request submitted"}), 200
 
 
@@ -72,48 +95,40 @@ def approve_request(req_id):
     req.status = "approved"
     db.session.commit()
 
-    # 🟢 UNC network folder path (update to match your folder)
+    # UNC Network Path (update this for your environment)
     NETWORK_BASE_PATH = r"\\10.178.0.14\Public\Telecommunication\06-OLD PROJECT REFERENCE\AWE\Architect Diagram\Rev-A"
 
-    # 🧭 Normalize and create full path to the requested file
-    # Construct full UNC path directly
-    network_base = r"\\10.178.0.14\Public\Telecommunication\06-OLD PROJECT REFERENCE\AWE\Architect Diagram\Rev-A"
-    # Ensure .pdf is always included
+    # Normalize path and ensure .pdf extension
     filename = req.document_name
     if not filename.lower().endswith(".pdf"):
         filename += ".pdf"
 
-    doc_path = os.path.join(network_base, filename)
-    print("Looking for document at:", doc_path)
+    doc_path = os.path.normpath(os.path.join(NETWORK_BASE_PATH, filename))
+    logging.info(f"🔍 Looking for document at: {doc_path}")
 
-    print("Looking for document at:", doc_path)
-
-
-    # 🧾 Check if file exists
     if not os.path.exists(doc_path):
-        print(f"⚠️ File not found: {doc_path}")
+        logging.warning(f"⚠️ File not found: {doc_path}")
         return jsonify({"error": f"Document not found on server: {doc_path}"}), 404
 
-    # 📧 Send email with attachment
+    # Try to send email with attachment
     try:
         msg = Message(
             subject=f"Document Request Approved: {req.document_name}",
             sender=app.config["MAIL_USERNAME"],
             recipients=[req.email],
-            body=f"Hello,\n\nYour requested document '{req.document_name}' has been approved. The document is attached below.",
+            body=f"Hello,\n\nYour requested document '{req.document_name}' has been approved.\nPlease find it attached below.\n\nRegards,\nDocument Control Team",
         )
 
         with open(doc_path, "rb") as fp:
-            msg.attach(req.document_name, "application/pdf", fp.read())
+            msg.attach(filename, "application/pdf", fp.read())
 
         mail.send(msg)
-
-        print(f"✅ Sent document '{req.document_name}' to {req.email}")
+        logging.info(f"✅ Sent '{filename}' to {req.email}")
         return jsonify({"message": "Approved and email sent"}), 200
 
     except Exception as e:
-        print(f"❌ Email send failed: {e}")
-        return jsonify({"error": str(e)}), 500
+        logging.error(f"❌ Email send failed: {e}")
+        return jsonify({"error": f"Email failed to send: {str(e)}"}), 500
 
 
 @app.route("/reject-request/<int:req_id>", methods=["POST"])
@@ -124,9 +139,15 @@ def reject_request(req_id):
 
     req.status = "rejected"
     db.session.commit()
+
+    logging.info(f"🚫 Request ID {req_id} rejected")
     return jsonify({"message": "Request rejected"}), 200
 
 
+# ==========================================================
+# MAIN ENTRY
+# ==========================================================
 if __name__ == "__main__":
     os.makedirs("files", exist_ok=True)
+    logging.info("🚀 Server running at http://127.0.0.1:5000")
     app.run(debug=True)
