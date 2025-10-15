@@ -60,6 +60,22 @@ with app.app_context():
     db.create_all()
 
 # ==========================================================
+# DEFAULT ROUTE (for Render or local testing)
+# ==========================================================
+@app.route("/")
+def home():
+    return jsonify({
+        "message": "✅ Flask backend is running successfully on Render!",
+        "routes": [
+            "/request-document (POST)",
+            "/get-requests (GET)",
+            "/approve-request/<id> (POST)",
+            "/reject-request/<id> (POST)"
+        ]
+    })
+
+
+# ==========================================================
 # ROUTES
 # ==========================================================
 @app.route("/request-document", methods=["POST"])
