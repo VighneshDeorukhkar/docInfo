@@ -12,7 +12,7 @@ export default function Home() {
     setMessage("Submitting...");
 
     try {
-      const res = await fetch("http://127.0.0.1:5000/request-document", {
+      const res = await fetch("https://docinfo-backend.onrender.com/request-document", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
