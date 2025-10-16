@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS, cross_origin
+from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail, Message
 import os
@@ -20,11 +20,12 @@ print("EMAIL_PASS:", EMAIL_PASS)
 # ==========================================================
 app = Flask(__name__)
 
-# ======== GLOBAL CORS CONFIG ========
-CORS(app, origins=[
+# ======== FIXED GLOBAL CORS CONFIG ========
+# This ensures all routes (including OPTIONS preflight) respond correctly
+CORS(app, supports_credentials=True, origins=[
     "https://docinfo-frontend.onrender.com",  # deployed frontend
-    "http://localhost:3000"                  # local frontend for testing
-], supports_credentials=True)
+    "http://localhost:3000"                  # local frontend
+])
 
 # ==========================================================
 # CONFIGURATION
@@ -71,10 +72,6 @@ with app.app_context():
 # ROUTES
 # ==========================================================
 @app.route("/")
-@cross_origin(origins=[
-    "https://docinfo-frontend.onrender.com",
-    "http://localhost:3000"
-])
 def home():
     return jsonify({
         "message": "✅ Flask backend is running successfully!",
@@ -87,12 +84,9 @@ def home():
     })
 
 
-@app.route("/request-document", methods=["POST"])
-@cross_origin(origins=[
-    "https://docinfo-frontend.onrender.com",
-    "http://localhost:3000"
-], supports_credentials=True)
+@app.route("/request-document", methods=["POST", "OPTIONS"])
 def request_document():
+    # OPTIONS requests are handled automatically by Flask-CORS
     data = request.get_json()
     if not data or "email" not in data or "document_name" not in data:
         return jsonify({"error": "Missing email or document_name"}), 400
@@ -106,10 +100,6 @@ def request_document():
 
 
 @app.route("/get-requests", methods=["GET"])
-@cross_origin(origins=[
-    "https://docinfo-frontend.onrender.com",
-    "http://localhost:3000"
-])
 def get_requests():
     requests_data = RequestModel.query.all()
     result = [
@@ -120,10 +110,6 @@ def get_requests():
 
 
 @app.route("/approve-request/<int:req_id>", methods=["POST"])
-@cross_origin(origins=[
-    "https://docinfo-frontend.onrender.com",
-    "http://localhost:3000"
-], supports_credentials=True)
 def approve_request(req_id):
     req = RequestModel.query.get(req_id)
     if not req:
@@ -132,9 +118,7 @@ def approve_request(req_id):
     req.status = "approved"
     db.session.commit()
 
-    # Update this path to your actual document folder
     NETWORK_BASE_PATH = r"\\10.178.0.14\Public\Telecommunication\06-OLD PROJECT REFERENCE\AWE\Architect Diagram\Rev-A"
-
     filename = req.document_name
     if not filename.lower().endswith(".pdf"):
         filename += ".pdf"
@@ -167,10 +151,6 @@ def approve_request(req_id):
 
 
 @app.route("/reject-request/<int:req_id>", methods=["POST"])
-@cross_origin(origins=[
-    "https://docinfo-frontend.onrender.com",
-    "http://localhost:3000"
-], supports_credentials=True)
 def reject_request(req_id):
     req = RequestModel.query.get(req_id)
     if not req:
