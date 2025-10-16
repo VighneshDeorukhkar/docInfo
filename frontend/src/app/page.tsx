@@ -12,7 +12,7 @@ export default function Home() {
     setMessage("Submitting...");
 
     try {
-      const res = await fetch("https://docinfo-backend.onrender.com/request-document", {
+      const res = await fetch("https://docinfo-5267.onrender.com/request-document", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -26,10 +26,13 @@ export default function Home() {
       const data = await res.json();
       if (res.ok) {
         setMessage("✅ Request submitted successfully!");
+        setEmail("");          // clear form
+        setDocumentName("");   // clear form
       } else {
         setMessage("❌ Failed: " + data.error);
       }
     } catch (err) {
+      console.error(err);
       setMessage("⚠️ Error connecting to backend!");
     }
   };
