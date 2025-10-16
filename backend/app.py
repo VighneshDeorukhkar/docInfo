@@ -38,6 +38,7 @@ CORS(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "requests.db")
 FILES_PATH = os.path.join(BASE_DIR, "files")  # Local folder for PDFs
+os.makedirs(FILES_PATH, exist_ok=True)
 
 app.config.update({
     "SQLALCHEMY_DATABASE_URI": f"sqlite:///{DB_PATH}",
@@ -61,6 +62,10 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s]: %(message)s",
     handlers=[logging.StreamHandler()]
 )
+
+@app.before_request
+def log_request_info():
+    logging.info(f"➡️ {request.method} {request.url} | Body: {request.get_json()}")
 
 # ==========================================================
 # DATABASE MODEL
@@ -127,13 +132,12 @@ def approve_request(req_id):
     if not filename.lower().endswith(".pdf"):
         filename += ".pdf"
 
-    # Use local files folder
     doc_path = os.path.join(FILES_PATH, filename)
     logging.info(f"🔍 Looking for document at: {doc_path}")
 
     if not os.path.exists(doc_path):
         logging.warning(f"⚠️ File not found: {doc_path}")
-        return jsonify({"error": f"Document not found on server: {doc_path}"}), 404
+        return jsonify({"error": f"Document not found on server: {filename}"}), 404
 
     try:
         msg = Message(
@@ -147,12 +151,12 @@ def approve_request(req_id):
             msg.attach(filename, "application/pdf", fp.read())
 
         mail.send(msg)
-        logging.info(f"✅ Sent '{filename}' to {req.email}")
+        logging.info(f"✅ Email sent: '{filename}' → {req.email}")
         return jsonify({"message": "Approved and email sent"}), 200
 
     except Exception as e:
-        logging.error(f"❌ Email send failed: {e}")
-        return jsonify({"error": f"Email failed to send: {str(e)}"}), 500
+        logging.error(f"❌ Email send failed for request ID {req_id}: {e}", exc_info=True)
+        return jsonify({"error": f"Email failed: {str(e)}"}), 500
 
 @app.route("/reject-request/<int:req_id>", methods=["POST"])
 def reject_request(req_id):
@@ -169,7 +173,6 @@ def reject_request(req_id):
 # MAIN ENTRY
 # ==========================================================
 if __name__ == "__main__":
-    os.makedirs(FILES_PATH, exist_ok=True)
     port = int(os.environ.get("PORT", 5000))
     logging.info(f"🚀 Server running on 0.0.0.0:{port}")
     app.run(host="0.0.0.0", port=port, debug=False)
