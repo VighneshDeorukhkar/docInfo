@@ -6,40 +6,28 @@ import os
 from dotenv import load_dotenv
 import logging
 
-# ==========================================================
-# Load environment variables
-# ==========================================================
+# Load env variables
 load_dotenv()
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASS = os.getenv("EMAIL_PASS")
-print("EMAIL_USER:", EMAIL_USER)
-print("EMAIL_PASS:", EMAIL_PASS)
 
-# ==========================================================
 # Flask setup
-# ==========================================================
 app = Flask(__name__)
 
-# ======== GLOBAL CORS CONFIG ========
-CORS(
-    app,
-    origins=[
-        "https://docinfo-frontend.onrender.com",
-        "http://localhost:3000"
-    ],
-    supports_credentials=True,
-    methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"]
-)
+# CORS
+CORS(app,
+     origins=["https://docinfo-frontend.onrender.com", "http://localhost:3000"],
+     supports_credentials=True,
+     methods=["GET", "POST", "OPTIONS"],
+     allow_headers=["Content-Type", "Authorization"])
 
-# ==========================================================
-# CONFIGURATION
-# ==========================================================
+# Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "requests.db")
-FILES_PATH = os.path.join(BASE_DIR, "files")  # Local folder for PDFs
+FILES_PATH = os.path.join(BASE_DIR, "files")
 os.makedirs(FILES_PATH, exist_ok=True)
 
+# Config
 app.config.update({
     "SQLALCHEMY_DATABASE_URI": f"sqlite:///{DB_PATH}",
     "SQLALCHEMY_TRACK_MODIFICATIONS": False,
@@ -50,49 +38,26 @@ app.config.update({
     "MAIL_PASSWORD": EMAIL_PASS,
 })
 
-# Initialize extensions
 db = SQLAlchemy(app)
 mail = Mail(app)
 
-# ==========================================================
-# LOGGING SETUP
-# ==========================================================
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s]: %(message)s",
-    handlers=[logging.StreamHandler()]
-)
+# Logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s]: %(message)s")
 
-@app.before_request
-def log_request_info():
-    logging.info(f"➡️ {request.method} {request.url} | Body: {request.get_json()}")
-
-# ==========================================================
-# DATABASE MODEL
-# ==========================================================
+# Database model
 class RequestModel(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(200))
     document_name = db.Column(db.String(200))
-    status = db.Column(db.String(50), default="pending")  # pending/approved/rejected
+    status = db.Column(db.String(50), default="pending")
 
 with app.app_context():
     db.create_all()
 
-# ==========================================================
-# ROUTES
-# ==========================================================
+# Routes
 @app.route("/")
 def home():
-    return jsonify({
-        "message": "✅ Flask backend is running successfully!",
-        "routes": [
-            "/request-document (POST)",
-            "/get-requests (GET)",
-            "/approve-request/<id> (POST)",
-            "/reject-request/<id> (POST)"
-        ]
-    })
+    return jsonify({"message": "Backend is running", "routes": ["/request-document", "/get-requests", "/approve-request/<id>", "/reject-request/<id>"]})
 
 @app.route("/request-document", methods=["POST", "OPTIONS"])
 def request_document():
@@ -106,17 +71,12 @@ def request_document():
     new_req = RequestModel(email=data["email"], document_name=data["document_name"])
     db.session.add(new_req)
     db.session.commit()
-
-    logging.info(f"📥 New request added: {data['document_name']} by {data['email']}")
     return jsonify({"message": "Request submitted"}), 200
 
 @app.route("/get-requests", methods=["GET"])
 def get_requests():
-    requests_data = RequestModel.query.all()
-    result = [
-        {"id": r.id, "email": r.email, "document": r.document_name, "status": r.status}
-        for r in requests_data
-    ]
+    all_requests = RequestModel.query.all()
+    result = [{"id": r.id, "email": r.email, "document": r.document_name, "status": r.status} for r in all_requests]
     return jsonify(result), 200
 
 @app.route("/approve-request/<int:req_id>", methods=["POST"])
@@ -128,34 +88,21 @@ def approve_request(req_id):
     req.status = "approved"
     db.session.commit()
 
-    filename = req.document_name
-    if not filename.lower().endswith(".pdf"):
-        filename += ".pdf"
-
+    filename = req.document_name if req.document_name.lower().endswith(".pdf") else req.document_name + ".pdf"
     doc_path = os.path.join(FILES_PATH, filename)
-    logging.info(f"🔍 Looking for document at: {doc_path}")
-
     if not os.path.exists(doc_path):
-        logging.warning(f"⚠️ File not found: {doc_path}")
-        return jsonify({"error": f"Document not found on server: {filename}"}), 404
+        return jsonify({"error": f"Document not found: {filename}"}), 404
 
     try:
-        msg = Message(
-            subject=f"Document Request Approved: {req.document_name}",
-            sender=EMAIL_USER,
-            recipients=[req.email],
-            body=f"Hello,\n\nYour requested document '{req.document_name}' has been approved.\nPlease find it attached below.\n\nRegards,\nDocument Control Team",
-        )
-
+        msg = Message(subject=f"Document Approved: {req.document_name}",
+                      sender=EMAIL_USER,
+                      recipients=[req.email],
+                      body=f"Your requested document '{req.document_name}' has been approved.")
         with open(doc_path, "rb") as fp:
             msg.attach(filename, "application/pdf", fp.read())
-
         mail.send(msg)
-        logging.info(f"✅ Email sent: '{filename}' → {req.email}")
         return jsonify({"message": "Approved and email sent"}), 200
-
     except Exception as e:
-        logging.error(f"❌ Email send failed for request ID {req_id}: {e}", exc_info=True)
         return jsonify({"error": f"Email failed: {str(e)}"}), 500
 
 @app.route("/reject-request/<int:req_id>", methods=["POST"])
@@ -166,13 +113,8 @@ def reject_request(req_id):
 
     req.status = "rejected"
     db.session.commit()
-    logging.info(f"🚫 Request ID {req_id} rejected")
     return jsonify({"message": "Request rejected"}), 200
 
-# ==========================================================
-# MAIN ENTRY
-# ==========================================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    logging.info(f"🚀 Server running on 0.0.0.0:{port}")
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port)
