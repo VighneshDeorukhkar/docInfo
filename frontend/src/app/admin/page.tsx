@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 
-const BACKEND_URL = "https://docinfo-5267.onrender.com"; // live backend URL
+const BACKEND_URL = "https://docinfo-5267.onrender.com";
 
 interface RequestType {
   id: number;
@@ -14,38 +14,34 @@ export default function AdminPage() {
   const [requests, setRequests] = useState<RequestType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionLoading, setActionLoading] = useState<number | null>(null); // Track which request is being processed
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
 
-  // Fetch all requests
   const fetchRequests = async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(`${BACKEND_URL}/get-requests`);
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const data = await res.json();
       setRequests(data);
     } catch (err: any) {
-      console.error("Failed to fetch requests:", err);
-      setError("Failed to load requests. Check your backend or network.");
+      setError("Failed to load requests. Check backend or network.");
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle approve or reject
   const handleAction = async (id: number, action: "approve" | "reject") => {
     setActionLoading(id);
     try {
-      const res = await fetch(`${BACKEND_URL}/${action}-request/${id}`, {
-        method: "POST",
-      });
+      const res = await fetch(`${BACKEND_URL}/${action}-request/${id}`, { method: "POST" });
       const data = await res.json();
       alert(data.message || data.error);
-      fetchRequests(); // Refresh list
+      fetchRequests();
     } catch (err) {
-      console.error(err);
       alert(`Error ${action}ing request!`);
+      console.error(err);
     } finally {
       setActionLoading(null);
     }
@@ -61,7 +57,6 @@ export default function AdminPage() {
   return (
     <div style={{ padding: "30px" }}>
       <h1 style={{ fontSize: "24px", marginBottom: "20px" }}>📂 Document Control Dashboard</h1>
-
       {requests.length === 0 ? (
         <p>No requests found.</p>
       ) : (
@@ -85,16 +80,10 @@ export default function AdminPage() {
                 <td>
                   {req.status === "pending" ? (
                     <>
-                      <button
-                        onClick={() => handleAction(req.id, "approve")}
-                        disabled={actionLoading === req.id}
-                      >
+                      <button onClick={() => handleAction(req.id, "approve")} disabled={actionLoading === req.id}>
                         {actionLoading === req.id ? "Processing..." : "✅ Approve"}
                       </button>{" "}
-                      <button
-                        onClick={() => handleAction(req.id, "reject")}
-                        disabled={actionLoading === req.id}
-                      >
+                      <button onClick={() => handleAction(req.id, "reject")} disabled={actionLoading === req.id}>
                         {actionLoading === req.id ? "Processing..." : "❌ Reject"}
                       </button>
                     </>
