@@ -20,12 +20,17 @@ print("EMAIL_PASS:", EMAIL_PASS)
 # ==========================================================
 app = Flask(__name__)
 
-# ======== FIXED GLOBAL CORS CONFIG ========
-# This ensures all routes (including OPTIONS preflight) respond correctly
-CORS(app, supports_credentials=True, origins=[
-    "https://docinfo-frontend.onrender.com",  # deployed frontend
-    "http://localhost:3000"                  # local frontend
-])
+# ======== GLOBAL CORS CONFIG ========
+CORS(
+    app,
+    origins=[
+        "https://docinfo-frontend.onrender.com",  # deployed frontend
+        "http://localhost:3000"                   # local frontend
+    ],
+    supports_credentials=True,
+    methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"]
+)
 
 # ==========================================================
 # CONFIGURATION
@@ -83,10 +88,12 @@ def home():
         ]
     })
 
-
 @app.route("/request-document", methods=["POST", "OPTIONS"])
 def request_document():
-    # OPTIONS requests are handled automatically by Flask-CORS
+    # OPTIONS preflight requests are handled automatically by Flask-CORS
+    if request.method == "OPTIONS":
+        return jsonify({"message": "CORS preflight"}), 200
+
     data = request.get_json()
     if not data or "email" not in data or "document_name" not in data:
         return jsonify({"error": "Missing email or document_name"}), 400
@@ -98,7 +105,6 @@ def request_document():
     logging.info(f"📥 New request added: {data['document_name']} by {data['email']}")
     return jsonify({"message": "Request submitted"}), 200
 
-
 @app.route("/get-requests", methods=["GET"])
 def get_requests():
     requests_data = RequestModel.query.all()
@@ -107,7 +113,6 @@ def get_requests():
         for r in requests_data
     ]
     return jsonify(result), 200
-
 
 @app.route("/approve-request/<int:req_id>", methods=["POST"])
 def approve_request(req_id):
@@ -118,6 +123,7 @@ def approve_request(req_id):
     req.status = "approved"
     db.session.commit()
 
+    # Update this path to your actual document folder
     NETWORK_BASE_PATH = r"\\10.178.0.14\Public\Telecommunication\06-OLD PROJECT REFERENCE\AWE\Architect Diagram\Rev-A"
     filename = req.document_name
     if not filename.lower().endswith(".pdf"):
@@ -149,7 +155,6 @@ def approve_request(req_id):
         logging.error(f"❌ Email send failed: {e}")
         return jsonify({"error": f"Email failed to send: {str(e)}"}), 500
 
-
 @app.route("/reject-request/<int:req_id>", methods=["POST"])
 def reject_request(req_id):
     req = RequestModel.query.get(req_id)
@@ -158,10 +163,8 @@ def reject_request(req_id):
 
     req.status = "rejected"
     db.session.commit()
-
     logging.info(f"🚫 Request ID {req_id} rejected")
     return jsonify({"message": "Request rejected"}), 200
-
 
 # ==========================================================
 # MAIN ENTRY
