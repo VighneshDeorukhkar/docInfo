@@ -14,6 +14,7 @@ export default function AdminPage() {
   const [requests, setRequests] = useState<RequestType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<number | null>(null); // Track which request is being processed
 
   // Fetch all requests
   const fetchRequests = async () => {
@@ -32,29 +33,21 @@ export default function AdminPage() {
     }
   };
 
-  // Approve request
-  const handleApprove = async (id: number) => {
+  // Handle approve or reject
+  const handleAction = async (id: number, action: "approve" | "reject") => {
+    setActionLoading(id);
     try {
-      const res = await fetch(`${BACKEND_URL}/approve-request/${id}`, { method: "POST" });
+      const res = await fetch(`${BACKEND_URL}/${action}-request/${id}`, {
+        method: "POST",
+      });
       const data = await res.json();
       alert(data.message || data.error);
       fetchRequests(); // Refresh list
     } catch (err) {
       console.error(err);
-      alert("Error approving request!");
-    }
-  };
-
-  // Reject request
-  const handleReject = async (id: number) => {
-    try {
-      const res = await fetch(`${BACKEND_URL}/reject-request/${id}`, { method: "POST" });
-      const data = await res.json();
-      alert(data.message || data.error);
-      fetchRequests(); // Refresh list
-    } catch (err) {
-      console.error(err);
-      alert("Error rejecting request!");
+      alert(`Error ${action}ing request!`);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -72,9 +65,9 @@ export default function AdminPage() {
       {requests.length === 0 ? (
         <p>No requests found.</p>
       ) : (
-        <table border={1} cellPadding={10}>
+        <table border={1} cellPadding={10} style={{ borderCollapse: "collapse" }}>
           <thead>
-            <tr>
+            <tr style={{ backgroundColor: "#f2f2f2" }}>
               <th>ID</th>
               <th>Email</th>
               <th>Document Name</th>
@@ -92,8 +85,18 @@ export default function AdminPage() {
                 <td>
                   {req.status === "pending" ? (
                     <>
-                      <button onClick={() => handleApprove(req.id)}>✅ Approve</button>{" "}
-                      <button onClick={() => handleReject(req.id)}>❌ Reject</button>
+                      <button
+                        onClick={() => handleAction(req.id, "approve")}
+                        disabled={actionLoading === req.id}
+                      >
+                        {actionLoading === req.id ? "Processing..." : "✅ Approve"}
+                      </button>{" "}
+                      <button
+                        onClick={() => handleAction(req.id, "reject")}
+                        disabled={actionLoading === req.id}
+                      >
+                        {actionLoading === req.id ? "Processing..." : "❌ Reject"}
+                      </button>
                     </>
                   ) : (
                     <span>—</span>
