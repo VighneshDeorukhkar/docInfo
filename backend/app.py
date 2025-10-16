@@ -15,7 +15,7 @@ print("EMAIL_PASS:", os.getenv("EMAIL_PASS"))
 
 # Flask setup
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["https://docinfo-frontend.onrender.com"])
 
 # ==========================================================
 # CONFIGURATION
