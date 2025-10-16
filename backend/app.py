@@ -24,8 +24,8 @@ app = Flask(__name__)
 CORS(
     app,
     origins=[
-        "https://docinfo-frontend.onrender.com",  # deployed frontend
-        "http://localhost:3000"                   # local frontend
+        "https://docinfo-frontend.onrender.com",
+        "http://localhost:3000"
     ],
     supports_credentials=True,
     methods=["GET", "POST", "OPTIONS"],
@@ -37,6 +37,7 @@ CORS(
 # ==========================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "requests.db")
+FILES_PATH = os.path.join(BASE_DIR, "files")  # Local folder for PDFs
 
 app.config.update({
     "SQLALCHEMY_DATABASE_URI": f"sqlite:///{DB_PATH}",
@@ -90,7 +91,6 @@ def home():
 
 @app.route("/request-document", methods=["POST", "OPTIONS"])
 def request_document():
-    # OPTIONS preflight requests are handled automatically by Flask-CORS
     if request.method == "OPTIONS":
         return jsonify({"message": "CORS preflight"}), 200
 
@@ -123,13 +123,12 @@ def approve_request(req_id):
     req.status = "approved"
     db.session.commit()
 
-    # Update this path to your actual document folder
-    NETWORK_BASE_PATH = r"\\10.178.0.14\Public\Telecommunication\06-OLD PROJECT REFERENCE\AWE\Architect Diagram\Rev-A"
     filename = req.document_name
     if not filename.lower().endswith(".pdf"):
         filename += ".pdf"
 
-    doc_path = os.path.normpath(os.path.join(NETWORK_BASE_PATH, filename))
+    # Use local files folder
+    doc_path = os.path.join(FILES_PATH, filename)
     logging.info(f"🔍 Looking for document at: {doc_path}")
 
     if not os.path.exists(doc_path):
@@ -170,7 +169,7 @@ def reject_request(req_id):
 # MAIN ENTRY
 # ==========================================================
 if __name__ == "__main__":
-    os.makedirs("files", exist_ok=True)
+    os.makedirs(FILES_PATH, exist_ok=True)
     port = int(os.environ.get("PORT", 5000))
     logging.info(f"🚀 Server running on 0.0.0.0:{port}")
     app.run(host="0.0.0.0", port=port, debug=False)

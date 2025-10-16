@@ -1,21 +1,32 @@
 "use client";
 import { useEffect, useState } from "react";
 
-const BACKEND_URL = "https://docinfo-5267.onrender.com"; // your live backend
+const BACKEND_URL = "https://docinfo-5267.onrender.com"; // live backend URL
+
+interface RequestType {
+  id: number;
+  email: string;
+  document: string;
+  status: "pending" | "approved" | "rejected";
+}
 
 export default function AdminPage() {
-  const [requests, setRequests] = useState<any[]>([]);
+  const [requests, setRequests] = useState<RequestType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Fetch all requests from backend
+  // Fetch all requests
   const fetchRequests = async () => {
+    setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`${BACKEND_URL}/get-requests`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       setRequests(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch requests:", err);
+      setError("Failed to load requests. Check your backend or network.");
     } finally {
       setLoading(false);
     }
@@ -24,12 +35,10 @@ export default function AdminPage() {
   // Approve request
   const handleApprove = async (id: number) => {
     try {
-      const res = await fetch(`${BACKEND_URL}/approve-request/${id}`, {
-        method: "POST",
-      });
+      const res = await fetch(`${BACKEND_URL}/approve-request/${id}`, { method: "POST" });
       const data = await res.json();
       alert(data.message || data.error);
-      fetchRequests();
+      fetchRequests(); // Refresh list
     } catch (err) {
       console.error(err);
       alert("Error approving request!");
@@ -39,12 +48,10 @@ export default function AdminPage() {
   // Reject request
   const handleReject = async (id: number) => {
     try {
-      const res = await fetch(`${BACKEND_URL}/reject-request/${id}`, {
-        method: "POST",
-      });
+      const res = await fetch(`${BACKEND_URL}/reject-request/${id}`, { method: "POST" });
       const data = await res.json();
       alert(data.message || data.error);
-      fetchRequests();
+      fetchRequests(); // Refresh list
     } catch (err) {
       console.error(err);
       alert("Error rejecting request!");
@@ -56,6 +63,7 @@ export default function AdminPage() {
   }, []);
 
   if (loading) return <p style={{ padding: "20px" }}>Loading requests...</p>;
+  if (error) return <p style={{ padding: "20px", color: "red" }}>{error}</p>;
 
   return (
     <div style={{ padding: "30px" }}>
@@ -75,7 +83,7 @@ export default function AdminPage() {
             </tr>
           </thead>
           <tbody>
-            {requests.map((req: any) => (
+            {requests.map((req) => (
               <tr key={req.id}>
                 <td>{req.id}</td>
                 <td>{req.email}</td>
