@@ -1,36 +1,61 @@
 "use client";
 import { useEffect, useState } from "react";
 
+const BACKEND_URL = "https://docinfo-5267.onrender.com"; // your live backend
+
 export default function AdminPage() {
-  const [requests, setRequests] = useState([]);
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
+  // Fetch all requests from backend
   const fetchRequests = async () => {
-    const res = await fetch("http://127.0.0.1:5000/get-requests");
-    const data = await res.json();
-    setRequests(data);
+    try {
+      const res = await fetch(`${BACKEND_URL}/get-requests`);
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const data = await res.json();
+      setRequests(data);
+    } catch (err) {
+      console.error("Failed to fetch requests:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // Approve request
   const handleApprove = async (id: number) => {
-    const res = await fetch(`http://127.0.0.1:5000/approve-request/${id}`, {
-      method: "POST",
-    });
-    const data = await res.json();
-    alert(data.message || data.error);
-    fetchRequests();
+    try {
+      const res = await fetch(`${BACKEND_URL}/approve-request/${id}`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      alert(data.message || data.error);
+      fetchRequests();
+    } catch (err) {
+      console.error(err);
+      alert("Error approving request!");
+    }
   };
 
+  // Reject request
   const handleReject = async (id: number) => {
-    const res = await fetch(`http://127.0.0.1:5000/reject-request/${id}`, {
-      method: "POST",
-    });
-    const data = await res.json();
-    alert(data.message || data.error);
-    fetchRequests();
+    try {
+      const res = await fetch(`${BACKEND_URL}/reject-request/${id}`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      alert(data.message || data.error);
+      fetchRequests();
+    } catch (err) {
+      console.error(err);
+      alert("Error rejecting request!");
+    }
   };
 
   useEffect(() => {
     fetchRequests();
   }, []);
+
+  if (loading) return <p style={{ padding: "20px" }}>Loading requests...</p>;
 
   return (
     <div style={{ padding: "30px" }}>
@@ -57,13 +82,14 @@ export default function AdminPage() {
                 <td>{req.document}</td>
                 <td>{req.status}</td>
                 <td>
-                  {req.status === "pending" && (
+                  {req.status === "pending" ? (
                     <>
                       <button onClick={() => handleApprove(req.id)}>✅ Approve</button>{" "}
                       <button onClick={() => handleReject(req.id)}>❌ Reject</button>
                     </>
+                  ) : (
+                    <span>—</span>
                   )}
-                  {req.status !== "pending" && <span>—</span>}
                 </td>
               </tr>
             ))}
