@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from flask_sqlalchemy import SQLAlchemy
 from flask_mail import Mail, Message
 import os
@@ -10,12 +10,21 @@ import logging
 # Load environment variables
 # ==========================================================
 load_dotenv()
-print("EMAIL_USER:", os.getenv("EMAIL_USER"))
-print("EMAIL_PASS:", os.getenv("EMAIL_PASS"))
+EMAIL_USER = os.getenv("EMAIL_USER")
+EMAIL_PASS = os.getenv("EMAIL_PASS")
+print("EMAIL_USER:", EMAIL_USER)
+print("EMAIL_PASS:", EMAIL_PASS)
 
+# ==========================================================
 # Flask setup
+# ==========================================================
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": ["https://docinfo-frontend.onrender.com", "http://localhost:3000"]}}, supports_credentials=True)
+
+# ======== GLOBAL CORS CONFIG ========
+CORS(app, origins=[
+    "https://docinfo-frontend.onrender.com",  # deployed frontend
+    "http://localhost:3000"                  # local frontend for testing
+], supports_credentials=True)
 
 # ==========================================================
 # CONFIGURATION
@@ -29,8 +38,8 @@ app.config.update({
     "MAIL_SERVER": "smtp.gmail.com",
     "MAIL_PORT": 587,
     "MAIL_USE_TLS": True,
-    "MAIL_USERNAME": os.getenv("EMAIL_USER"),
-    "MAIL_PASSWORD": os.getenv("EMAIL_PASS"),
+    "MAIL_USERNAME": EMAIL_USER,
+    "MAIL_PASSWORD": EMAIL_PASS,
 })
 
 # Initialize extensions
@@ -55,17 +64,20 @@ class RequestModel(db.Model):
     document_name = db.Column(db.String(200))
     status = db.Column(db.String(50), default="pending")  # pending/approved/rejected
 
-
 with app.app_context():
     db.create_all()
 
 # ==========================================================
-# DEFAULT ROUTE (for Render or local testing)
+# ROUTES
 # ==========================================================
 @app.route("/")
+@cross_origin(origins=[
+    "https://docinfo-frontend.onrender.com",
+    "http://localhost:3000"
+])
 def home():
     return jsonify({
-        "message": "✅ Flask backend is running successfully on Render!",
+        "message": "✅ Flask backend is running successfully!",
         "routes": [
             "/request-document (POST)",
             "/get-requests (GET)",
@@ -75,10 +87,11 @@ def home():
     })
 
 
-# ==========================================================
-# ROUTES
-# ==========================================================
 @app.route("/request-document", methods=["POST"])
+@cross_origin(origins=[
+    "https://docinfo-frontend.onrender.com",
+    "http://localhost:3000"
+], supports_credentials=True)
 def request_document():
     data = request.get_json()
     if not data or "email" not in data or "document_name" not in data:
@@ -93,6 +106,10 @@ def request_document():
 
 
 @app.route("/get-requests", methods=["GET"])
+@cross_origin(origins=[
+    "https://docinfo-frontend.onrender.com",
+    "http://localhost:3000"
+])
 def get_requests():
     requests_data = RequestModel.query.all()
     result = [
@@ -103,6 +120,10 @@ def get_requests():
 
 
 @app.route("/approve-request/<int:req_id>", methods=["POST"])
+@cross_origin(origins=[
+    "https://docinfo-frontend.onrender.com",
+    "http://localhost:3000"
+], supports_credentials=True)
 def approve_request(req_id):
     req = RequestModel.query.get(req_id)
     if not req:
@@ -111,7 +132,7 @@ def approve_request(req_id):
     req.status = "approved"
     db.session.commit()
 
-    # Update this path for your actual document folder
+    # Update this path to your actual document folder
     NETWORK_BASE_PATH = r"\\10.178.0.14\Public\Telecommunication\06-OLD PROJECT REFERENCE\AWE\Architect Diagram\Rev-A"
 
     filename = req.document_name
@@ -128,7 +149,7 @@ def approve_request(req_id):
     try:
         msg = Message(
             subject=f"Document Request Approved: {req.document_name}",
-            sender=app.config["MAIL_USERNAME"],
+            sender=EMAIL_USER,
             recipients=[req.email],
             body=f"Hello,\n\nYour requested document '{req.document_name}' has been approved.\nPlease find it attached below.\n\nRegards,\nDocument Control Team",
         )
@@ -146,6 +167,10 @@ def approve_request(req_id):
 
 
 @app.route("/reject-request/<int:req_id>", methods=["POST"])
+@cross_origin(origins=[
+    "https://docinfo-frontend.onrender.com",
+    "http://localhost:3000"
+], supports_credentials=True)
 def reject_request(req_id):
     req = RequestModel.query.get(req_id)
     if not req:
@@ -159,12 +184,10 @@ def reject_request(req_id):
 
 
 # ==========================================================
-# MAIN ENTRY (RENDER FIX)
+# MAIN ENTRY
 # ==========================================================
 if __name__ == "__main__":
     os.makedirs("files", exist_ok=True)
-
-    port = int(os.environ.get("PORT", 5000))  # Render sets PORT env variable
+    port = int(os.environ.get("PORT", 5000))
     logging.info(f"🚀 Server running on 0.0.0.0:{port}")
-
     app.run(host="0.0.0.0", port=port, debug=False)
