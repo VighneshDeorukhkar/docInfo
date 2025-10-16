@@ -5,4 +5,5 @@ python-dotenv
 email-validator
 Flask-SQLAlchemy
 Flask-Mail
+gunicorn==23.0.0
 
